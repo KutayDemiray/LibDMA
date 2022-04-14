@@ -75,7 +75,17 @@ int dma_init(int m) {
  * Returns NULL on invalid input (size is outside bounds) or another error.
  */
 void *dma_alloc(int size) {
-	int words = (size >> 4) + 2; // we always allocate in blocks of multiples of 16 bytes (2 words) regardless of actual size requested
+	// we always allocate in blocks of multiples of 16 bytes (2 words) regardless of actual size requested
+	int words;
+	if (size < 16) {
+		words = 2;
+	}
+	else if (size % 16 == 0) {
+		words = size >> 4;
+	}
+	else {
+		words = (size >> 4) + 2;
+	} 
 	
 	// get lock as we'll be accessing the heap
 	pthread_mutex_lock(&mutex);
@@ -167,10 +177,39 @@ void *dma_alloc(int size) {
 }
 
 /*
- * Frees the allocated memory block pointed by p.
+ * Frees the allocated memory block pointed by p. Also marks the corresponding bits in bitmap as free.
  */
 void dma_free(void *p) {
 	pthread_mutex_lock(&mutex);
+	
+	unsigned int word_offset = (p - heap) >> 3; // bytes between the two addresses divided by 8 gives word offset of p from start of heap
+	unsigned int int_offset = word_offset >> 5;
+	
+	int curint = int_offset;
+	int curbit = word_offset % 32;
+	
+	// set flag as 11 from 01
+	((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] | (0xC0000000 >> curbit);
+	
+	curbit = (curbit + 2) % 32;
+	if (curbit == 0) {
+		curint++;
+	}
+	
+	while ((((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0x40000000) && (((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0xC0000000) ) { // bunu yazan adam kör oldu
+		((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] | (0xC0000000 >> curbit);
+		curbit = (curbit + 2) % 32;
+		if (curbit == 0) {
+			curint++;
+		}
+	}
+	
+	
+	// go to the corresponding free bits at bitmap
+	
+	// set first two as 01
+	
+	// set rest as 0
 	
 	pthread_mutex_unlock(&mutex);
 }
