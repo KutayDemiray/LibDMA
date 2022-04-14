@@ -1,4 +1,5 @@
 #include "dma.h"
+#include <stdio.h>
 #include <pthread.h>
 #include <sys/mman.h>
 
@@ -23,18 +24,16 @@ const void *heap_head; // points to allocatable memory of the heap (not bitmap o
 // mutex to make the library thread-safe
 pthread_mutex_t mutex;
  
-void bitmap_write()
- 
 int dma_init(int m) {
 	// lock init
 	pthread_mutex_init(&mutex, NULL);
+	// no need to lock since we assume dma_init() will be called on the main thread before any other threads are created
 	
 	// heap init	
-	pthread_mutex_lock(&mutex);
 	
 	// first, allocate and map a virtual memory region of length 2^m bytes
 	dma_alloc(0x1 << m);
-	heap = (char *) mmap(NULL, 0x1 << m, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, NULL, 0); // TODO MAP_SHARED instead of private?
+	heap = (char *) mmap(NULL, 0x1 << m, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0); // TODO MAP_SHARED instead of private?
 	if (heap == (void *) (-1)) {
 		printf("dma_init(): mmap() failed\n");
 		return -1;
@@ -56,7 +55,8 @@ int dma_init(int m) {
 	// 14 <= m condition guarantees that the bitmap is always at least 1 int wide so that the statement below can be done safely
 	((unsigned int *) heap)[0] = 0x40000000; // 4 bytes = 1 int, in binary 01000000 00000000 00000000 00000000
 	
-	((unsigned int *) heap)[bitmap_size >> 8] = 0x40000000; // allocate the 256 bytes = 32 words of reserved space after bitmap 
+	// allocate the 256 bytes = 32 words of reserved space after bitmap (which will take 32 bits = 1 int in total)
+	((unsigned int *) heap)[bitmap_size >> 8] = 0x40000000; // 01000000 00000000 00000000 00000000
 	
 	// save start of allocatable memory as a pointer
 	// it should point to the (bitmap size + 256)th byte
@@ -66,9 +66,6 @@ int dma_init(int m) {
 	for (i = (bitmap_size >> 8) + 1; i < (bitmap_size >> 2); i++) { // the bitmap spans 2^(m - 6) bytes = 2^(m - 8) ints
 		((unsigned int *) heap)[i] = 0xFFFFFFFF; // each 1 (in binary form) represents a free word
 	}
-	
-	// release lock
-	pthread_mutex_unlock(&mutex);
 	
 	return 0;
 }
@@ -80,40 +77,93 @@ int dma_init(int m) {
 void *dma_alloc(int size) {
 	int words = (size >> 4) + 2; // we always allocate in blocks of multiples of 16 bytes (2 words) regardless of actual size requested
 	
+	// get lock as we'll be accessing the heap
 	pthread_mutex_lock(&mutex);
+	
 	// find the first empty segment with sufficient size on the bit map
 	int i;
-	int streak = 0; // sequence of free space
-	unsigned int *bitmapptr = (unsigned int *) heap; 
+	int streak = 0; // length of current sequence of free space
+	int bit_offset = 0; // calculated from the left, not right (offset wrt. msb)
+	int int_offset = 0;
 	for (i = (bitmap_size >> 8) + 1; i < bitmap_size >> 2; i++) {
-		unsigned int cur = bitmapptr[i];
+		unsigned int cur = ((unsigned int *) heap)[i];
 		// note that because we always allocate in multiples of 16 bytes (2 words)
 		// the "allocated" flag (01) will never be split between two ints
 		// and "free" bits will always be in the multiples of 2 in these ints
 		
 		// first filter out any (01) flags, if any
-		unsigned int mask = 0xFF; // should be initially 11000000 00000000 00000000 00000000
 		unsigned int tmp = cur;
 		int shifts = 0;
 		while (tmp != 0x0) {
-			if (mask & tmp == 0xC0000000) { // found 01 flag, filter it out
-				unsigned int filter = ~(mask >> shifts);
-				cur = cur & filter;
+			if ((tmp & 0xC0000000) == 0x80000000) { // 0x80000000 = 01000000 00000000 00000000 00000000
+				cur = cur & ~(0xC0000000 >> shifts); // found 01 flag, filter it out
 			}
-			tmp << 2;
+			tmp = tmp << 2;
 			shifts += 2;
 		}
 		
-		// remaining set bits all belong to free memory, count them
-		while (cur != 0x0) {
-			
+		// remaining set bits should all point to free memory, count the length of the sequence of them
+		bit_offset = 0;
+		while (shifts < 32) {
+			shifts = 0;
+			if ((cur & 0xC0000000) == 0x0) {
+				streak = 0;
+			}
+			else {
+				if (streak == 0) {
+					// save start position (on the bitmap) of the new streak
+					bit_offset = shifts;
+					int_offset = i;
+				}
+				streak += 2;
+				if (streak == words) { // found a free block with sufficient size, allocate memory
+					
+					// set streak region as allocated on the bitmap
+					int curint = int_offset;
+					int curbit = bit_offset;
+					
+					// set first two bits as 01 to mark as allocated
+					
+					// clear first bit of allocated region in bitmap
+					((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x1 << (32 - curbit));
+					
+					// no need to set the second bit to obtain 01 (it is already set)
+					
+					// update curbit and curint
+					curbit = (curbit + 2) % 32;
+					if (curbit == 30) {
+						curint++;
+					}
+					
+					// now set rest of the bits as 0
+					while (curint != i && curbit != shifts) {
+						// set bits two at a time
+						((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x3 << (32 - curbit)); // all bits set except two
+						
+						// update curbit and curint
+						curbit = (curbit + 2) % 32;
+						if (curbit == 30) {
+							curint++;
+						}
+					} 			
+					
+					// get a pointer pointing to the corresponding location on the heap
+					// the streak starts at offset:
+					// (32 * int_offset + bit_offset) * 8 bytes = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
+					void *ptr = (void *) (&((unsigned int *) heap)[((int_offset << 5) + bit_offset) << 1]);
+					
+					pthread_mutex_unlock(&mutex);
+					return ptr;
+				}
+			}
+			shifts = (shifts + 2);
+			cur = cur << 2;
 		}
 	}
-	
-	// get a pointer pointing to the corresponding location on the heap
-	
+
+	// failed to find a large enough contiguous memory segment in heap, return null
 	pthread_mutex_unlock(&mutex);
-	return p;
+	return NULL;
 }
 
 /*
