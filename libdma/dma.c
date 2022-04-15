@@ -180,14 +180,15 @@ void *dma_alloc(int size) {
  * Frees the allocated memory block pointed by p. Also marks the corresponding bits in bitmap as free.
  */
 void dma_free(void *p) {
-	printf("berke");
+	
 	pthread_mutex_lock(&mutex);
 	printf ("ff0\n");
-	unsigned int word_offset = (p - heap) >> 3; // bytes between the two addresses divided by 8 gives word offset of p from start of heap
+	unsigned int word_offset = (p - heap) >>  3; // bytes between the two addresses divided by 8 gives word offset of p from start of heap
+	printf("%d", word_offset);
 	printf ("ff1\n");
 	
 	unsigned int int_offset = word_offset >> 5;
-	
+	printf("berke");
 	int curint = int_offset;
 	int curbit = word_offset % 32;
 	
