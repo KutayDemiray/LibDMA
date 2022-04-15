@@ -204,12 +204,60 @@ void dma_free(void *p) {
 		}
 	}
 	
+	pthread_mutex_unlock(&mutex);
+}
+
+
+void dma_print_page (int pno){
+	pthread_mutex_lock(&mutex);
 	
-	// go to the corresponding free bits at bitmap
+	unsigned long int page_size_words = 0x1 << 19;
+	unsigned long int page_size_ints = page_size_words >> 6;
 	
-	// set first two as 01
+	int i;
+	for (i = 0; i < page_size_ints; i++){
+		printf("%x",((unsigned long int*)heap)[pno*page_number_ints + i]);
+		if (i % 4 == 3)
+			printf("\n");
+	}
 	
-	// set rest as 0
+	printf("\n");
 	
 	pthread_mutex_unlock(&mutex);
 }
+
+void dma_print_bitmap(){
+	pthread_mutex_lock(&mutex);
+	
+	unsigned long int bitmap_size_words = bitmap_size >> 3;
+	unsigned long int bitmap_size_ints = bitmap_size >> 6;
+	
+	int i; 
+	for (i = 0; i < bitmap_size_ints; i++){
+		unsigned long int tmp = ((unsigned long int*)heap)[i];
+		int j;
+		for (j = 0; j < 64; j++){
+			printf("%d", tmp >> (63-j));
+			if (j % 8 == 7)
+				printf(" ");
+		}
+		printf("\n");
+	}
+	
+	pthread_mutex_unlock(&mutex);
+}
+
+void dma_print_blocks(){
+	pthread_mutex_lock(&mutex);
+	unsigned long heap_size_words = ;
+	for (i; i < )
+	
+	pthread_mutex_unlock(&mutex);
+}
+
+
+
+
+
+
+
