@@ -11,7 +11,12 @@
 void *heap = NULL; 
 unsigned int heap_size; // in bytes
 unsigned int bitmap_size; // in bytes
-const void *heap_head; // points to allocatable memory of the heap (not bitmap or reserved space) 
+
+// total internal fragmentation ever created in the heap
+// note that deallocating memory blocks do not decrement this value, hence it is not a measure of
+// total internal fragmentation in the memory at any given time
+int total_intfrag = 0;
+
 /*
  * Initializes the library. This function will allocate a continuous segment of free memory
  * from the virtual memory of the process it's being called from using the mmap() syscall.
@@ -57,10 +62,6 @@ int dma_init(int m) {
 	
 	// allocate the 256 bytes = 32 words of reserved space after bitmap (which will take 32 bits = 1 int in total)
 	((unsigned int *) heap)[bitmap_size >> 8] = 0x40000000; // 01000000 00000000 00000000 00000000
-	
-	// save start of allocatable memory as a pointer
-	// it should point to the (bitmap size + 256)th byte
-	heap_head = (void *) &(((unsigned int *) heap)[(bitmap_size + 256) >> 2]);
 	
 	// allocateable part of the heap is completely free, mark as such on the bitmap
 	for (i = (bitmap_size >> 8) + 1; i < (bitmap_size >> 2); i++) { // the bitmap spans 2^(m - 6) bytes = 2^(m - 8) ints
@@ -162,6 +163,9 @@ void *dma_alloc(int size) {
 					// (32 * int_offset + bit_offset) * 8 bytes = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
 					void *ptr = (void *) (&((unsigned int *) heap)[((int_offset << 5) + bit_offset) << 1]);
 					
+					// update total internal fragmentation
+					total_intfrag += size % 16;
+					
 					pthread_mutex_unlock(&mutex);
 					return ptr;
 				}
@@ -212,4 +216,8 @@ void dma_free(void *p) {
 	// set rest as 0
 	
 	pthread_mutex_unlock(&mutex);
+}
+
+int dma_give_intfrag() {
+	return total_intfrag;
 }
