@@ -77,6 +77,7 @@ int dma_init(int m) {
 void *dma_alloc(int size) {
 	// we always allocate in blocks of multiples of 16 bytes (2 words) regardless of actual size requested
 	int words;
+	
 	if (size < 16) {
 		words = 2;
 	}
@@ -86,7 +87,7 @@ void *dma_alloc(int size) {
 	else {
 		words = (size >> 4) + 2;
 	} 
-	
+
 	// get lock as we'll be accessing the heap
 	pthread_mutex_lock(&mutex);
 	
@@ -111,7 +112,7 @@ void *dma_alloc(int size) {
 			tmp = tmp << 2;
 			shifts += 2;
 		}
-		
+
 		// remaining set bits should all point to free memory, count the length of the sequence of them
 		bit_offset = 0;
 		while (shifts < 32) {
@@ -149,7 +150,6 @@ void *dma_alloc(int size) {
 					while (curint != i && curbit != shifts) {
 						// set bits two at a time
 						((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x3 << (32 - curbit)); // all bits set except two
-						
 						// update curbit and curint
 						curbit = (curbit + 2) % 32;
 						if (curbit == 30) {
@@ -180,16 +180,21 @@ void *dma_alloc(int size) {
  * Frees the allocated memory block pointed by p. Also marks the corresponding bits in bitmap as free.
  */
 void dma_free(void *p) {
+	printf("berke");
 	pthread_mutex_lock(&mutex);
-	
+	printf ("ff0\n");
 	unsigned int word_offset = (p - heap) >> 3; // bytes between the two addresses divided by 8 gives word offset of p from start of heap
+	printf ("ff1\n");
+	
 	unsigned int int_offset = word_offset >> 5;
 	
 	int curint = int_offset;
 	int curbit = word_offset % 32;
 	
 	// set flag as 11 from 01
+	
 	((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] | (0xC0000000 >> curbit);
+	printf ("2\n");
 	
 	curbit = (curbit + 2) % 32;
 	if (curbit == 0) {
@@ -197,7 +202,9 @@ void dma_free(void *p) {
 	}
 	
 	while ((((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0x40000000) && (((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0xC0000000) ) { // bunu yazan adam kör oldu
+		printf ("3\n");
 		((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] | (0xC0000000 >> curbit);
+		printf ("4\n");
 		curbit = (curbit + 2) % 32;
 		if (curbit == 0) {
 			curint++;
@@ -216,7 +223,7 @@ void dma_print_page (int pno){
 	
 	int i;
 	for (i = 0; i < page_size_ints; i++){
-		printf("%x",((unsigned long int*)heap)[pno*page_number_ints + i]);
+		printf("%lx",((unsigned long int*)heap)[pno*page_size_ints + i]);
 		if (i % 4 == 3)
 			printf("\n");
 	}
@@ -230,14 +237,14 @@ void dma_print_bitmap(){
 	pthread_mutex_lock(&mutex);
 	
 	unsigned long int bitmap_size_words = bitmap_size >> 3;
-	unsigned long int bitmap_size_ints = bitmap_size >> 6;
+	unsigned long int bitmap_size_ints = bitmap_size_words >> 6;
 	
 	int i; 
 	for (i = 0; i < bitmap_size_ints; i++){
 		unsigned long int tmp = ((unsigned long int*)heap)[i];
 		int j;
 		for (j = 0; j < 64; j++){
-			printf("%d", tmp >> (63-j));
+			printf("%ld", tmp >> (63-j));
 			if (j % 8 == 7)
 				printf(" ");
 		}
@@ -251,7 +258,7 @@ void dma_print_blocks(){
 	pthread_mutex_lock(&mutex);
 	
 	unsigned long int bitmap_size_words = bitmap_size >> 3;
-	unsigned long int bitmap_size_ints = bitmap_size >> 6;
+	unsigned long int bitmap_size_ints = bitmap_size_words >> 6;
 	unsigned long int c = 0xC000000000000000;
 	unsigned long int tmp;
 	unsigned long int content;
@@ -277,7 +284,7 @@ void dma_print_blocks(){
 			
 			if (tmp == 0x1){
 				if (amount_free != 0){
-					printf("F, %p, %x (%d) \n", heap_top, amount_free, amount_free);
+					printf("F, %p, %lx (%ld) \n", heap_top, amount_free, amount_free);
 					heap_top += amount_free;
 				}
 					
@@ -290,7 +297,7 @@ void dma_print_blocks(){
 			}
 			else if (tmp == 0x3){
 				if (alloc && (amount_alloc != 0)){
-					printf("A, %p, %x (%d) \n", heap_top, amount_alloc, amount_alloc);
+					printf("A, %p, %lx (%ld) \n", heap_top, amount_alloc, amount_alloc);
 					heap_top += amount_alloc;
 				}
 				amount_free += 2;
