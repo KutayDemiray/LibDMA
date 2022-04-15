@@ -249,8 +249,61 @@ void dma_print_bitmap(){
 
 void dma_print_blocks(){
 	pthread_mutex_lock(&mutex);
-	unsigned long heap_size_words = ;
-	for (i; i < )
+	
+	unsigned long int bitmap_size_words = bitmap_size >> 3;
+	unsigned long int bitmap_size_ints = bitmap_size >> 6;
+	unsigned long int c = 0xC000000000000000;
+	unsigned long int tmp;
+	unsigned long int content;
+	unsigned long int content2;
+	unsigned long int amount_alloc = 0;
+	unsigned long int amount_free = 0;
+	int traverse = 0;
+	int alloc = 0;
+	void *heap_top = heap_head;
+	
+	
+	int i;
+	for (i = 0; i < bitmap_size_ints; i++){
+	
+		content = ((unsigned long int*)heap)[i];
+		content2 = content; // need for shift operations since at the end we need tmp again
+				
+		while (traverse < 256){
+			traverse += 2;
+			tmp = content2 & c;
+			content2 = content2 << 2;
+			tmp = tmp << 62; 
+			
+			if (tmp == 0x1){
+				if (amount_free != 0){
+					printf("F, %p, %x (%d) \n", heap_top, amount_free, amount_free);
+					heap_top += amount_free;
+				}
+					
+				amount_alloc = 2;
+				amount_free = 0;
+				alloc = 1;
+			}
+			else if (tmp == 0x0){
+				amount_alloc += 2;
+			}
+			else if (tmp == 0x3){
+				if (alloc && (amount_alloc != 0)){
+					printf("A, %p, %x (%d) \n", heap_top, amount_alloc, amount_alloc);
+					heap_top += amount_alloc;
+				}
+				amount_free += 2;
+				amount_alloc = 0;
+				alloc = 0;
+			}
+		}
+			
+			
+		
+		
+	}
+	
 	
 	pthread_mutex_unlock(&mutex);
 }
