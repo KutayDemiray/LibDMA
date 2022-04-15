@@ -97,10 +97,69 @@ void *dma_alloc(int size) {
 	pthread_mutex_lock(&mutex);
 	
 	// find the first empty segment with sufficient size on the bit map
-	int i;
+	int curint = (bitmap_size >> 8) + 1;
+	int curbit = 0;
 	int streak = 0; // length of current sequence of free space
 	int bit_offset = 0; // calculated from the left, not right (offset wrt. msb)
 	int int_offset = 0;
+	
+	int startint, startbit;
+	while (curint < (bitmap_size >> 2)) {
+		unsigned int cur = ((unsigned int *) heap)[curint];
+		curbit = 0;
+		while (curbit < 32) {
+			if ((cur & 0xC0000000) != 0xC0000000) { // if current 2 bits are not 11
+				streak = 0;
+			}
+			else { // 11 found
+				if (streak == 0) { // if at the start of the new streak, save position
+					startint = curint;
+					startbit = curbit;
+				}
+				
+				streak += 2;
+				
+				if (streak == words) { // sufficient streak found
+					printf("streak found starting at int %d bit %d\n", startint, startbit);
+					int curint = startint;
+					int curbit = startbit;
+					
+					// make flag bits 01
+					((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x80000000 >> (curbit));
+					// no need to set the second bit to obtain 01 (it is already set)
+					
+					curbit = (curbit + 2) % 32;
+					if (curbit == 0) {
+						curint++;
+					}
+					
+					// clear rest of the bits as 0
+					int i;
+					for (i = 0; i < words - 2; i += 2) {
+						((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0xC0000000 >> (curbit));
+						curbit = (curbit + 2) % 32;
+						if (curbit == 0) {
+							curint++;
+						}
+					}
+					
+					// return ptr to start address
+					// the allocated region starts at offset:
+					// (32 * startint + curint) * 1 word = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
+					void *ptr = (void *) &(((unsigned int *) heap)[((int_offset << 5) + bit_offset) << 1]);
+					
+					pthread_mutex_unlock(&mutex);
+					return ptr;
+				}
+				
+			}
+			cur = cur << 2; 
+			curbit += 2;
+		}
+		curint++;
+	}
+	
+	/*
 	for (i = (bitmap_size >> 8) + 1; i < bitmap_size >> 2; i++) {
 		unsigned int cur = ((unsigned int *) heap)[i];
 		// note that because we always allocate in multiples of 16 bytes (2 words)
@@ -125,7 +184,7 @@ void *dma_alloc(int size) {
 			if ((cur & 0xC0000000) == 0x0) {
 				streak = 0;
 			}
-			else {
+			else {//if ((cur & 0xC0000000) == 0xC0000000) {
 				if (streak == 0) {
 					// save start position (on the bitmap) of the new streak
 					bit_offset = shifts;
@@ -168,6 +227,7 @@ void *dma_alloc(int size) {
 						}
 					} 			
 					
+					
 					// get a pointer pointing to the corresponding location on the heap
 					// the streak starts at offset:
 					// (32 * int_offset + bit_offset) * 8 bytes = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
@@ -178,10 +238,11 @@ void *dma_alloc(int size) {
 				}
 			}
 			
-			shifts = (shifts + 2) % 32;
+			shifts = (shifts + 2);
 			cur = cur << 2;
 		}
 	}
+	*/
 
 	// failed to find a large enough contiguous memory segment in heap, return null
 	pthread_mutex_unlock(&mutex);
