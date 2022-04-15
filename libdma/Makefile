@@ -5,4 +5,4 @@ libdma.a: dma.c
 app: app.c
 	gcc -Wall -g -o app app.c -L. -ldma
 clean:
-	rm -fr *~ libdma.a dma.o app.o app
+	rm -fr libdma.a dma.o app.o app *~

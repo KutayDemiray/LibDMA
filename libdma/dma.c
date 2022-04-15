@@ -32,7 +32,6 @@ int dma_init(int m) {
 	// heap init	
 	
 	// first, allocate and map a virtual memory region of length 2^m bytes
-	dma_alloc(0x1 << m);
 	heap = (char *) mmap(NULL, 0x1 << m, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0); // TODO MAP_SHARED instead of private?
 	if (heap == (void *) (-1)) {
 		printf("dma_init(): mmap() failed\n");
@@ -71,13 +70,19 @@ int dma_init(int m) {
 }
 
 /*
- * Allocates memory with given size.
+ * Allocates memory with given size (in bytes).
  * Returns NULL on invalid input (size is outside bounds) or another error.
  */
 void *dma_alloc(int size) {
+
+	printf("dma_alloc(%d)\n", size);
 	// we always allocate in blocks of multiples of 16 bytes (2 words) regardless of actual size requested
-	int words;
+	int words = size % 8 == 0 ? (size >> 3) : (size >> 3) + 1;
 	
+	// alloc size = 2 * ceil(words / 2);
+	words = words % 2 == 0 ? words : words + 1;
+	// 114
+	/*
 	if (size < 16) {
 		words = 2;
 	}
@@ -87,7 +92,7 @@ void *dma_alloc(int size) {
 	else {
 		words = (size >> 4) + 2;
 	} 
-
+	*/
 	// get lock as we'll be accessing the heap
 	pthread_mutex_lock(&mutex);
 	
@@ -106,7 +111,7 @@ void *dma_alloc(int size) {
 		unsigned int tmp = cur;
 		int shifts = 0;
 		while (tmp != 0x0) {
-			if ((tmp & 0xC0000000) == 0x80000000) { // 0x80000000 = 01000000 00000000 00000000 00000000
+			if ((tmp & 0xC0000000) == 0x40000000) { // 0x40000000 = 01000000 00000000 00000000 00000000
 				cur = cur & ~(0xC0000000 >> shifts); // found 01 flag, filter it out
 			}
 			tmp = tmp << 2;
@@ -115,8 +120,8 @@ void *dma_alloc(int size) {
 
 		// remaining set bits should all point to free memory, count the length of the sequence of them
 		bit_offset = 0;
+		shifts = 0;
 		while (shifts < 32) {
-			shifts = 0;
 			if ((cur & 0xC0000000) == 0x0) {
 				streak = 0;
 			}
@@ -128,6 +133,7 @@ void *dma_alloc(int size) {
 				}
 				streak += 2;
 				if (streak == words) { // found a free block with sufficient size, allocate memory
+					printf("streak found starting at int %d byte %d\n", int_offset, bit_offset);
 					
 					// set streak region as allocated on the bitmap
 					int curint = int_offset;
@@ -136,23 +142,28 @@ void *dma_alloc(int size) {
 					// set first two bits as 01 to mark as allocated
 					
 					// clear first bit of allocated region in bitmap
-					((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x1 << (32 - curbit));
+					printf("flag set\n");
+					((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x80000000 >> (curbit));
 					
 					// no need to set the second bit to obtain 01 (it is already set)
 					
 					// update curbit and curint
 					curbit = (curbit + 2) % 32;
-					if (curbit == 30) {
+					if (curbit == 0) {
 						curint++;
 					}
 					
 					// now set rest of the bits as 0
-					while (curint != i && curbit != shifts) {
+					int j;
+					for (j = 0; j < words - 2; j = j + 2) {
 						// set bits two at a time
-						((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x3 << (32 - curbit)); // all bits set except two
+						printf("curint %d curbit %d: %d%d\n", curint, curbit,
+							((0x80000000 >> curbit) & ((unsigned int *) heap)[curint]) >> (31 - curbit),
+							((0x40000000 >> curbit) & ((unsigned int *) heap)[curint]) >> (30 - curbit));
+						((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0xC0000000 >> (curbit)); // all bits set except two
 						// update curbit and curint
 						curbit = (curbit + 2) % 32;
-						if (curbit == 30) {
+						if (curbit == 0) {
 							curint++;
 						}
 					} 			
@@ -166,7 +177,8 @@ void *dma_alloc(int size) {
 					return ptr;
 				}
 			}
-			shifts = (shifts + 2);
+			
+			shifts = (shifts + 2) % 32;
 			cur = cur << 2;
 		}
 	}
@@ -237,19 +249,20 @@ void dma_print_page (int pno){
 void dma_print_bitmap(){
 	pthread_mutex_lock(&mutex);
 	
-	unsigned long int bitmap_size_words = bitmap_size >> 3;
-	unsigned long int bitmap_size_ints = bitmap_size_words >> 6;
+	// bitmap is 2^(m - 3) bits = 2^(m - 6) bytes = 2^(m - 8) ints = 2^(m - 9) words 
+	unsigned long int bitmap_size_ints = bitmap_size >> 2;
 	
 	int i; 
 	for (i = 0; i < bitmap_size_ints; i++){
-		unsigned long int tmp = ((unsigned long int*)heap)[i];
+		unsigned int tmp = ((unsigned int*)heap)[i];
 		int j;
-		for (j = 0; j < 64; j++){
-			printf("%ld", tmp >> (63-j));
+		for (j = 0; j < 32; j++){
+			printf("%d", 0x1 & (tmp >> (31-j)));
 			if (j % 8 == 7)
 				printf(" ");
 		}
-		printf("\n");
+		if (i % 2 == 1)
+			printf("\n");
 	}
 	
 	pthread_mutex_unlock(&mutex);

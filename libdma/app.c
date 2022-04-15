@@ -18,12 +18,19 @@ int main() {
 	
 	p1 = dma_alloc(100); // allocate space for 100 bytes
 	printf ("a1\n");
+	
 	p2 = dma_alloc(1024); 
 	printf ("a2\n");
+	dma_print_bitmap();
+	/*
 	p3 = dma_alloc(64); //always check the return value
+	
+	/*
 	printf ("a3\n");
 	p4 = dma_alloc(220);
 	printf ("a4\n");
+	
+	/*
 	dma_free(p3); 
 	printf ("f1\n");
 	p3 = dma_alloc(2048); 
@@ -38,6 +45,7 @@ int main() {
 	printf ("f4\n");
 	dma_free(p4);
 	printf ("f5\n");
+	*/
 	
 	return 0;
 }
