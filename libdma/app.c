@@ -21,18 +21,21 @@ int main() {
 	
 	p2 = dma_alloc(1024); 
 	printf ("a2\n");
-	dma_print_bitmap();
-	/*
+	
 	p3 = dma_alloc(64); //always check the return value
+	dma_print_page(0);
 	
 	/*
 	printf ("a3\n");
 	p4 = dma_alloc(220);
 	printf ("a4\n");
 	
-	/*
+	
 	dma_free(p3); 
 	printf ("f1\n");
+	dma_print_bitmap();
+	
+	/*
 	p3 = dma_alloc(2048); 
 	printf ("a5\n");
 	dma_print_blocks(); 

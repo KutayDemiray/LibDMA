@@ -255,30 +255,27 @@ void *dma_alloc(int size) {
 void dma_free(void *p) {
 	
 	pthread_mutex_lock(&mutex);
-	printf ("ff0\n");
 	unsigned int word_offset = (p - heap) >>  3; // bytes between the two addresses divided by 8 gives word offset of p from start of heap
 	printf("%d", word_offset);
-	printf ("ff1\n");
+
 	
 	unsigned int int_offset = word_offset >> 5;
-	printf("berke");
+
 	int curint = int_offset;
 	int curbit = word_offset % 32;
 	
 	// set flag as 11 from 01
 	
 	((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] | (0xC0000000 >> curbit);
-	printf ("2\n");
 	
 	curbit = (curbit + 2) % 32;
 	if (curbit == 0) {
 		curint++;
 	}
 	
-	while ((((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0x40000000) && (((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0xC0000000) ) { // bunu yazan adam kör oldu
-		printf ("3\n");
+	while ((((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0x40000000) && (((((unsigned int *) heap)[curint] << curbit) & 0xC0000000) != 0xC0000000) ) { 
 		((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] | (0xC0000000 >> curbit);
-		printf ("4\n");
+
 		curbit = (curbit + 2) % 32;
 		if (curbit == 0) {
 			curint++;
@@ -292,13 +289,29 @@ void dma_free(void *p) {
 void dma_print_page (int pno){
 	pthread_mutex_lock(&mutex);
 	
-	unsigned long int page_size_words = 0x1 << 19;
-	unsigned long int page_size_ints = page_size_words >> 6;
+	unsigned long int page_size_bytes = 0x1 << 12;
+	unsigned long int page_size_ints = page_size_bytes >> 2;
+	unsigned int tmp;
 	
 	int i;
 	for (i = 0; i < page_size_ints; i++){
-		printf("%lx",((unsigned long int*)heap)[pno*page_size_ints + i]);
-		if (i % 4 == 3)
+		//printf(" %d -->", i);
+		unsigned int content = ((unsigned int*)heap)[(pno)*page_size_ints + i];
+		
+		int j;
+		for (j = 0; j < 2*sizeof(unsigned int);j++){
+			tmp = content & 0xF0000000;
+			tmp = tmp >> (4 * (2*sizeof(unsigned int)-1));
+			
+			if (tmp == 0)
+				printf("0");
+			else 
+				printf("%x", tmp);
+				
+			content = content << 4;
+		}
+		
+		if (i % 8 == 7)
 			printf("\n");
 	}
 	
@@ -331,61 +344,69 @@ void dma_print_bitmap(){
 
 void dma_print_blocks(){
 	pthread_mutex_lock(&mutex);
-	
-	unsigned long int bitmap_size_words = bitmap_size >> 3;
-	unsigned long int bitmap_size_ints = bitmap_size_words >> 6;
-	unsigned long int c = 0xC000000000000000;
-	unsigned long int tmp;
-	unsigned long int content;
-	unsigned long int content2;
+	//printf("Start of heap: %p \n", heap);
+	unsigned long int bitmap_size_ints = bitmap_size >> 2;
+	unsigned int c = 0xC0000000;
+	unsigned int tmp;
+	unsigned int content;
+	unsigned int content2;
 	unsigned long int amount_alloc = 0;
 	unsigned long int amount_free = 0;
 	int traverse = 0;
 	int alloc = 0;
-	void *heap_top = heap_head;
+	void *heap_top = heap;
 	
 	
-	int i;
+	int i; 
 	for (i = 0; i < bitmap_size_ints; i++){
-	
-		content = ((unsigned long int*)heap)[i];
+		//printf("i: %d \n", i);
+		traverse = 0;
+		content = ((unsigned int*)heap)[i];
 		content2 = content; // need for shift operations since at the end we need tmp again
 				
-		while (traverse < 256){
+		while (traverse < 32){
 			traverse += 2;
+			//printf("traverse no: %d \n", traverse);
 			tmp = content2 & c;
 			content2 = content2 << 2;
-			tmp = tmp << 62; 
+			tmp = tmp >> 30; 
 			
+			//printf("tmp: %x \n", tmp);
 			if (tmp == 0x1){
 				if (amount_free != 0){
 					printf("F, %p, %lx (%ld) \n", heap_top, amount_free, amount_free);
 					heap_top += amount_free;
 				}
+				else if (amount_alloc != 0){
+					printf("A, %p, %lx (%ld) \n", heap_top, amount_alloc, amount_alloc);
+					heap_top += amount_alloc;
+				}
 					
 				amount_alloc = 2;
 				amount_free = 0;
-				alloc = 1;
 			}
 			else if (tmp == 0x0){
 				amount_alloc += 2;
+				amount_free = 0; // to be sure, not required
 			}
 			else if (tmp == 0x3){
-				if (alloc && (amount_alloc != 0)){
+				if (amount_alloc != 0){
 					printf("A, %p, %lx (%ld) \n", heap_top, amount_alloc, amount_alloc);
 					heap_top += amount_alloc;
 				}
 				amount_free += 2;
 				amount_alloc = 0;
-				alloc = 0;
 			}
 		}
 			
-			
-		
-		
 	}
-	
+	if (amount_alloc != 0){
+		printf("A, %p, %lx (%ld) \n", heap_top, amount_alloc, amount_alloc);
+	}
+	else {
+		printf("F, %p, %lx (%ld) \n", heap_top, amount_free, amount_free);
+	}
+
 	
 	pthread_mutex_unlock(&mutex);
 }
