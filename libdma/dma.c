@@ -345,6 +345,10 @@ void dma_print_bitmap(){
 	pthread_mutex_unlock(&mutex);
 }
 
+/*
+ * Prints each allocated/free block in the heap region, its start address and size.
+ * Note that apart from user-allocated blocks, the bitmap and "reserved" regions are also displayed (first and second rows, respectively)
+ */
 void dma_print_blocks(){
 	pthread_mutex_lock(&mutex);
 	//printf("Start of heap: %p \n", heap);

@@ -27,9 +27,6 @@ int main() {
 	printf("Main p2: %p\n", p2);
 	printf("Main p3: %p\n", p3);
 	
-	dma_free(p1);
-	
-	dma_print_blocks();
 	
 
 	printf ("a3\n");
@@ -39,10 +36,9 @@ int main() {
 	
 	dma_free(p3); 
 	printf ("f1\n");
-	dma_print_bitmap();
 	
-	/*
 	p3 = dma_alloc(2048); 
+	
 	printf ("a5\n");
 	dma_print_blocks(); 
 	printf ("p1\n");
@@ -54,7 +50,6 @@ int main() {
 	printf ("f4\n");
 	dma_free(p4);
 	printf ("f5\n");
-	*/
-	
+
 	return 0;
 }
