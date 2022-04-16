@@ -23,7 +23,7 @@ int main() {
 	printf ("a2\n");
 	
 	p3 = dma_alloc(64); //always check the return value
-	dma_print_page(0);
+	dma_print_blocks();
 	
 	/*
 	printf ("a3\n");

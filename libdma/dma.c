@@ -353,18 +353,26 @@ void dma_print_blocks(){
 	unsigned long int amount_alloc = 0;
 	unsigned long int amount_free = 0;
 	int traverse = 0;
-	int alloc = 0;
 	void *heap_top = heap;
-	
-	
+	char* heap_print;
 	int i; 
+	
 	for (i = 0; i < bitmap_size_ints; i++){
 		//printf("i: %d \n", i);
 		traverse = 0;
 		content = ((unsigned int*)heap)[i];
-		content2 = content; // need for shift operations since at the end we need tmp again
+		content2 = content; 
 				
 		while (traverse < 32){
+			if ((((unsigned long int)heap_top) << 16 )>> 16== (unsigned long int)heap_top){
+				heap_print = "0x0000";
+			}
+				
+			else{
+				heap_print = "";
+			}
+				
+					
 			traverse += 2;
 			//printf("traverse no: %d \n", traverse);
 			tmp = content2 & c;
@@ -374,12 +382,12 @@ void dma_print_blocks(){
 			//printf("tmp: %x \n", tmp);
 			if (tmp == 0x1){
 				if (amount_free != 0){
-					printf("F, %p, %lx (%ld) \n", heap_top, amount_free, amount_free);
-					heap_top += amount_free;
+					printf("F, %s%lx, 0x%lx (%ld) \n", heap_print, (unsigned long int)heap_top, 8*amount_free, 8*amount_free);
+					heap_top += 8*amount_free;
 				}
 				else if (amount_alloc != 0){
-					printf("A, %p, %lx (%ld) \n", heap_top, amount_alloc, amount_alloc);
-					heap_top += amount_alloc;
+					printf("A, %s%lx, 0x%lx (%ld) \n", heap_print, (unsigned long int)heap_top, 8*amount_alloc, 8*amount_alloc);
+					heap_top += 8*amount_alloc;
 				}
 					
 				amount_alloc = 2;
@@ -391,8 +399,8 @@ void dma_print_blocks(){
 			}
 			else if (tmp == 0x3){
 				if (amount_alloc != 0){
-					printf("A, %p, %lx (%ld) \n", heap_top, amount_alloc, amount_alloc);
-					heap_top += amount_alloc;
+					printf("A, %s%lx, 0x%lx (%ld) \n",heap_print, (unsigned long int)heap_top, 8*amount_alloc, 8*amount_alloc);
+					heap_top += 8*amount_alloc;
 				}
 				amount_free += 2;
 				amount_alloc = 0;
@@ -401,10 +409,10 @@ void dma_print_blocks(){
 			
 	}
 	if (amount_alloc != 0){
-		printf("A, %p, %lx (%ld) \n", heap_top, amount_alloc, amount_alloc);
+		printf("A, %s%lx, 0x%lx (%ld) \n", heap_print, (unsigned long int)heap_top, 8*amount_alloc, 8*amount_alloc);
 	}
 	else {
-		printf("F, %p, %lx (%ld) \n", heap_top, amount_free, amount_free);
+		printf("F, %s%lx, 0x%lx (%ld) \n", heap_print, (unsigned long int)heap_top, 8*amount_free, 8*amount_free);
 	}
 
 	
