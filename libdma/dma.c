@@ -100,8 +100,8 @@ void *dma_alloc(int size) {
 	int curint = (bitmap_size >> 8) + 1;
 	int curbit = 0;
 	int streak = 0; // length of current sequence of free space
-	int bit_offset = 0; // calculated from the left, not right (offset wrt. msb)
-	int int_offset = 0;
+	/*int bit_offset = 0; // calculated from the left, not right (offset wrt. msb)
+	int int_offset = 0;*/
 	
 	int startint, startbit;
 	while (curint < (bitmap_size >> 2)) {
@@ -146,7 +146,7 @@ void *dma_alloc(int size) {
 					// return ptr to start address
 					// the allocated region starts at offset:
 					// (32 * startint + curint) * 1 word = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
-					void *ptr = (void *) &(((unsigned int *) heap)[((int_offset << 5) + bit_offset) << 1]);
+					void *ptr = (void *) &(((unsigned int *) heap)[((startint << 5) + startbit) << 1]);
 					
 					pthread_mutex_unlock(&mutex);
 					return ptr;
@@ -255,8 +255,11 @@ void *dma_alloc(int size) {
 void dma_free(void *p) {
 	
 	pthread_mutex_lock(&mutex);
+	printf("heap: %p\n", heap);
+	printf("p: %p\n",p);
+	printf("%ld\n", p - heap);
 	unsigned int word_offset = (p - heap) >>  3; // bytes between the two addresses divided by 8 gives word offset of p from start of heap
-	printf("%d", word_offset);
+	//printf("%d", word_offset);
 
 	
 	unsigned int int_offset = word_offset >> 5;

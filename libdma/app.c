@@ -23,9 +23,15 @@ int main() {
 	printf ("a2\n");
 	
 	p3 = dma_alloc(64); //always check the return value
+	printf("Main p1: %p\n", p1);
+	printf("Main p2: %p\n", p2);
+	printf("Main p3: %p\n", p3);
+	
+	dma_free(p1);
+	
 	dma_print_blocks();
 	
-	/*
+
 	printf ("a3\n");
 	p4 = dma_alloc(220);
 	printf ("a4\n");
