@@ -78,7 +78,7 @@ int dma_init(int m) {
  * Returns NULL on invalid input (size is outside bounds) or another error.
  */
 void *dma_alloc(int size) {
-	printf("dma_alloc(%d)\n", size);
+	//printf("dma_alloc(%d)\n", size);
 	// we always allocate in blocks of multiples of 16 bytes (2 words) regardless of actual size requested
 	int words = size % 8 == 0 ? (size >> 3) : (size >> 3) + 1;
 	
@@ -142,9 +142,11 @@ void *dma_alloc(int size) {
 					// (32 * startint + curint) * 1 word = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
 					void *ptr = (void *) &(((unsigned int *) heap)[((startint << 5) + startbit) << 1]);
 					
+					total_intfrag += 8 * words - size;
+					
 					gettimeofday(&end, NULL);
-					double dif = (double)(end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
-					printf("The allocation of size %d bytes (actual %d bytes) lasted %f microseconds.\n", size, 8*words, dif);
+					long int dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
+					printf("The allocation of size %d bytes (actual %d bytes) lasted %ld microseconds.\n", size, 8*words, dif);
 					
 					pthread_mutex_unlock(&mutex);
 					return ptr;
@@ -158,8 +160,8 @@ void *dma_alloc(int size) {
 	}
 	
 	gettimeofday(&end, NULL);
-	double dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
-	printf("The allocation of size %d bytes (actual %d bytes) failed and lasted %f microseconds.\n", size, 8*words, dif);
+	long int dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
+	printf("The allocation of size %d bytes (actual %d bytes) failed and lasted %ld microseconds.\n", size, 8*words, dif);
 	// failed to find a large enough contiguous memory segment in heap, return null
 	pthread_mutex_unlock(&mutex);
 	return NULL;
@@ -197,8 +199,8 @@ void dma_free(void *p) {
 		}
 	}
 	gettimeofday(&end, NULL);
-	double dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
-	printf("The free of pointer %p lasted %f microseconds.\n", p, dif);
+	long int dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
+	printf("The free of pointer %p lasted %ld microseconds.\n", p, dif);
 	
 	pthread_mutex_unlock(&mutex);
 }

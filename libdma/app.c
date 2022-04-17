@@ -1,8 +1,10 @@
 #include "dma.h"
-#include "stdlib.h"
+#include <time.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 int main() {
+	/*
 	void *p1;
 	void *p2;
 	void *p3;
@@ -33,7 +35,62 @@ int main() {
 	dma_free(p2);
 	dma_free(p3);
 	dma_free(p4);
-
+	*/
+	
+	// internal fragmentation
+	int m = 16;
+	dma_init(m);
+	int allocable = (0x1 << m) - (0x1 << (m - 6)) - 256;
+	printf("allocatable space: %d\n", allocable);
+	time_t t;
+	srand((unsigned) time(&t));
+	
+	int allocs = 0;
+	
+	// fill heap with random allocations up to 256 bytes
+	int sumsize = 0;
+	int actualsize = 0;
+	
+	void* ptrs[500];
+	int sizes[500];
+	int words[500];
+	
+	void *p;
+	do {
+		if (allocs == 0 || rand() % 4 != 3) {
+			int size = rand() % 256 + 256;
+			p = dma_alloc(size);
+			if (p != NULL) {
+				sumsize += size;
+				sizes[allocs] = size;
+				words[allocs] = size % 8 == 0 ? (size >> 3) : (size >> 3) + 1;
+				words[allocs] = words[allocs] % 2 == 0 ? words[allocs] : words[allocs] + 1;
+				actualsize += words[allocs] * 8;
+				ptrs[allocs] = p;
+				allocs++;
+				printf("allocated %d bytes (total: %d bytes (%d actual) in %d allocs, total internal frag: %d bytes)\n", size, sumsize, actualsize, allocs, dma_give_intfrag());
+			}
+			else {
+				printf("test over at alloc %d of size %d (current allocated (actual) space: %d, max allocatable space: %d)\n", allocs + 1, size, actualsize, allocable);
+				dma_print_blocks();
+				dma_print_bitmap();
+			}
+		}
+		else {
+			int index = rand() % allocs;
+			if (ptrs[index] != NULL) {
+				dma_free(ptrs[index]);
+				ptrs[index] = NULL;
+				sumsize -= sizes[index];
+				actualsize -= words[index] * 8;
+				printf("freed ptr from alloc %d pointing to %d bytes\n", index, words[index] * 8);
+			}
+		}
+		
+	} while (p != NULL);
+	
+	
+	
 
 	return 0;
 }

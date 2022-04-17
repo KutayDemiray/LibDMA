@@ -2,3 +2,5 @@
 libdma/app
 libdma/libdma.a
 libdma/dma.o
+libdma/README.txt
+libdma/app
