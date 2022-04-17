@@ -146,7 +146,7 @@ void *dma_alloc(int size) {
 					
 					gettimeofday(&end, NULL);
 					long int dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
-					printf("The allocation of size %d bytes (actual %d bytes) lasted %ld microseconds.\n", size, 8*words, dif);
+					//printf("The allocation of size %d bytes (actual %d bytes) lasted %ld microseconds.\n", size, 8*words, dif);
 					
 					pthread_mutex_unlock(&mutex);
 					return ptr;
@@ -161,7 +161,7 @@ void *dma_alloc(int size) {
 	
 	gettimeofday(&end, NULL);
 	long int dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
-	printf("The allocation of size %d bytes (actual %d bytes) failed and lasted %ld microseconds.\n", size, 8*words, dif);
+	//printf("The allocation of size %d bytes (actual %d bytes) failed and lasted %ld microseconds.\n", size, 8*words, dif);
 	// failed to find a large enough contiguous memory segment in heap, return null
 	pthread_mutex_unlock(&mutex);
 	return NULL;
@@ -200,7 +200,7 @@ void dma_free(void *p) {
 	}
 	gettimeofday(&end, NULL);
 	long int dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
-	printf("The free of pointer %p lasted %ld microseconds.\n", p, dif);
+	//printf("The free of pointer %p lasted %ld microseconds.\n", p, dif);
 	
 	pthread_mutex_unlock(&mutex);
 }
