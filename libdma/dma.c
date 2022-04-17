@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 
 /* The "heap" managed by this library.
  * The beginning of it contains the bitmap. The bitmap contains 1 bit for every word (which is 8 bytes = 2^6 bits)
@@ -75,36 +76,26 @@ int dma_init(int m) {
  * Returns NULL on invalid input (size is outside bounds) or another error.
  */
 void *dma_alloc(int size) {
-
 	printf("dma_alloc(%d)\n", size);
 	// we always allocate in blocks of multiples of 16 bytes (2 words) regardless of actual size requested
 	int words = size % 8 == 0 ? (size >> 3) : (size >> 3) + 1;
 	
 	// alloc size = 2 * ceil(words / 2);
 	words = words % 2 == 0 ? words : words + 1;
-	// 114
-	/*
-	if (size < 16) {
-		words = 2;
-	}
-	else if (size % 16 == 0) {
-		words = size >> 4;
-	}
-	else {
-		words = (size >> 4) + 2;
-	} 
-	*/
+	
 	// get lock as we'll be accessing the heap
 	pthread_mutex_lock(&mutex);
 	
+	// init time
+	struct timeval end;
+	struct timeval start;
 	// find the first empty segment with sufficient size on the bit map
 	int curint = (bitmap_size >> 8) + 1;
 	int curbit = 0;
 	int streak = 0; // length of current sequence of free space
-	/*int bit_offset = 0; // calculated from the left, not right (offset wrt. msb)
-	int int_offset = 0;*/
 	
 	int startint, startbit;
+	gettimeofday(&start, NULL);
 	while (curint < (bitmap_size >> 2)) {
 		unsigned int cur = ((unsigned int *) heap)[curint];
 		curbit = 0;
@@ -121,7 +112,7 @@ void *dma_alloc(int size) {
 				streak += 2;
 				
 				if (streak == words) { // sufficient streak found
-					printf("streak found starting at int %d bit %d\n", startint, startbit);
+					//printf("streak found starting at int %d bit %d\n", startint, startbit);
 					int curint = startint;
 					int curbit = startbit;
 					
@@ -149,6 +140,10 @@ void *dma_alloc(int size) {
 					// (32 * startint + curint) * 1 word = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
 					void *ptr = (void *) &(((unsigned int *) heap)[((startint << 5) + startbit) << 1]);
 					
+					gettimeofday(&end, NULL);
+					double dif = (double)(end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
+					printf("The allocation of size %d bytes (actual %d bytes) lasted %f microseconds.\n", size, 8*words, dif);
+					
 					pthread_mutex_unlock(&mutex);
 					return ptr;
 				}
@@ -160,94 +155,9 @@ void *dma_alloc(int size) {
 		curint++;
 	}
 	
-	/*
-	for (i = (bitmap_size >> 8) + 1; i < bitmap_size >> 2; i++) {
-		unsigned int cur = ((unsigned int *) heap)[i];
-		// note that because we always allocate in multiples of 16 bytes (2 words)
-		// the "allocated" flag (01) will never be split between two ints
-		// and "free" bits will always be in the multiples of 2 in these ints
-		
-		// first filter out any (01) flags, if any
-		unsigned int tmp = cur;
-		int shifts = 0;
-		while (tmp != 0x0) {
-			if ((tmp & 0xC0000000) == 0x40000000) { // 0x40000000 = 01000000 00000000 00000000 00000000
-				cur = cur & ~(0xC0000000 >> shifts); // found 01 flag, filter it out
-			}
-			tmp = tmp << 2;
-			shifts += 2;
-		}
-
-		// remaining set bits should all point to free memory, count the length of the sequence of them
-		bit_offset = 0;
-		shifts = 0;
-		while (shifts < 32) {
-			if ((cur & 0xC0000000) == 0x0) {
-				streak = 0;
-			}
-			else {//if ((cur & 0xC0000000) == 0xC0000000) {
-				if (streak == 0) {
-					// save start position (on the bitmap) of the new streak
-					bit_offset = shifts;
-					int_offset = i;
-				}
-				streak += 2;
-				if (streak == words) { // found a free block with sufficient size, allocate memory
-					printf("streak found starting at int %d byte %d\n", int_offset, bit_offset);
-					
-					// set streak region as allocated on the bitmap
-					int curint = int_offset;
-					int curbit = bit_offset;
-					
-					// set first two bits as 01 to mark as allocated
-					
-					// clear first bit of allocated region in bitmap
-					printf("flag set\n");
-					((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0x80000000 >> (curbit));
-					
-					// no need to set the second bit to obtain 01 (it is already set)
-					
-					// update curbit and curint
-					curbit = (curbit + 2) % 32;
-					if (curbit == 0) {
-						curint++;
-					}
-					
-					// now set rest of the bits as 0
-					int j;
-					for (j = 0; j < words - 2; j = j + 2) {
-						// set bits two at a time
-						printf("curint %d curbit %d: %d%d\n", curint, curbit,
-							((0x80000000 >> curbit) & ((unsigned int *) heap)[curint]) >> (31 - curbit),
-							((0x40000000 >> curbit) & ((unsigned int *) heap)[curint]) >> (30 - curbit));
-						((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] & ~(0xC0000000 >> (curbit)); // all bits set except two
-						// update curbit and curint
-						curbit = (curbit + 2) % 32;
-						if (curbit == 0) {
-							curint++;
-						}
-					} 			
-					
-					
-					// get a pointer pointing to the corresponding location on the heap
-					// the streak starts at offset:
-					// (32 * int_offset + bit_offset) * 8 bytes = (32 * int_offset + bit_offset) * 2 ints of the whole memory segment
-					void *ptr = (void *) (&((unsigned int *) heap)[((int_offset << 5) + bit_offset) << 1]);
-					
-					// update total internal fragmentation
-					total_intfrag += size % 16;
-					
-					pthread_mutex_unlock(&mutex);
-					return ptr;
-				}
-			}
-			
-			shifts = (shifts + 2);
-			cur = cur << 2;
-		}
-	}
-	*/
-
+	gettimeofday(&end, NULL);
+	double dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
+	printf("The allocation of size %d bytes (actual %d bytes) failed and lasted %f microseconds.\n", size, 8*words, dif);
 	// failed to find a large enough contiguous memory segment in heap, return null
 	pthread_mutex_unlock(&mutex);
 	return NULL;
@@ -259,20 +169,16 @@ void *dma_alloc(int size) {
 void dma_free(void *p) {
 	
 	pthread_mutex_lock(&mutex);
-	printf("heap: %p\n", heap);
-	printf("p: %p\n",p);
-	printf("%ld\n", p - heap);
 	unsigned int word_offset = (p - heap) >>  3; // bytes between the two addresses divided by 8 gives word offset of p from start of heap
-	//printf("%d", word_offset);
-
-	
 	unsigned int int_offset = word_offset >> 5;
-
 	int curint = int_offset;
 	int curbit = word_offset % 32;
 	
-	// set flag as 11 from 01
+	struct timeval start;
+	struct timeval end;
+	gettimeofday(&start, NULL);
 	
+	// set flag as 11 from 01
 	((unsigned int *) heap)[curint] = ((unsigned int *) heap)[curint] | (0xC0000000 >> curbit);
 	
 	curbit = (curbit + 2) % 32;
@@ -288,6 +194,9 @@ void dma_free(void *p) {
 			curint++;
 		}
 	}
+	gettimeofday(&end, NULL);
+	double dif = (end.tv_sec-start.tv_sec)*1000000 + (end.tv_usec-start.tv_usec);
+	printf("The free of pointer %p lasted %f microseconds.\n", p, dif);
 	
 	pthread_mutex_unlock(&mutex);
 }
