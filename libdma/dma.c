@@ -38,6 +38,8 @@ int dma_init(int m) {
 	// heap init	
 	
 	// first, allocate and map a virtual memory region of length 2^m bytes
+	// we require the region to start at a page boundary
+	// but the linux manual says the kernel already guarantees that with mmap(), so no need to do anything extra
 	heap = (char *) mmap(NULL, 0x1 << m, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0); // TODO MAP_SHARED instead of private?
 	if (heap == (void *) (-1)) {
 		printf("dma_init(): mmap() failed\n");
